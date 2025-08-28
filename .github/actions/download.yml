@@ -1,0 +1,67 @@
+name: Build and Release Dumpbin
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Run dumpbin.py
+      run: python ./dumpbin.py
+    
+    - name: Get version from created zip file
+      id: get_version
+      run: |
+        # Find the created zip file in Releases directory
+        ZIP_FILE=$(find Releases -name "dumpbin-*.zip" | head -1)
+        if [ -z "$ZIP_FILE" ]; then
+          echo "No zip file found in Releases directory"
+          exit 1
+        fi
+        # Extract version from filename (e.g., dumpbin-17.8.34330.0-x64.zip -> 17.8.34330.0)
+        VERSION=$(basename "$ZIP_FILE" | sed 's/dumpbin-\(.*\)-x64\.zip/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+        echo "zip_name=$(basename $ZIP_FILE)" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.get_version.outputs.version }}
+        release_name: Dumpbin v${{ steps.get_version.outputs.version }}
+        body: |
+          Automated release of dumpbin tools v${{ steps.get_version.outputs.version }}
+          
+          This release contains the following files:
+          - dumpbin.exe
+          - link.exe
+          - link.exe.config
+          - tbbmalloc.dll
+          - mspdbcore.dll
+          
+          Built from Microsoft Visual Studio Build Tools.
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.get_version.outputs.zip_file }}
+        asset_name: ${{ steps.get_version.outputs.zip_name }}
+        asset_content_type: application/zip
